@@ -4,6 +4,7 @@ import { IconoInicio } from "@/components/IconoInicio";
 import { Aviso } from "@/components/Aviso";
 import { EncabezadoPagina } from "@/components/EncabezadoPagina";
 import { BotonEnviar } from "@/components/BotonEnviar";
+import { Icono } from "@/components/Icono";
 import { obtenerContexto, puedeAbrirTurno } from "@/lib/contexto";
 import { fechaTexto, hoyCalendarioMX, hora, pesos } from "@/lib/formato";
 import { avanceRenglon } from "@/lib/compras/ordenes";
@@ -58,82 +59,104 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
   const saldo = (tipo: string) => saldos?.find((s) => s.tipo === tipo)?.saldo ?? 0;
   const cambios = saldo("cambios");
 
+  const hoy = hoyCalendarioMX();
+  /** Frescura de cada fuente, solo para el color del chip: al día (≤2 días), atrasada (≤7) o vieja. */
+  const frescura = (f: { fecha?: string; error: boolean }) => {
+    if (f.error || !f.fecha) return "peligro";
+    const dias = (Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${f.fecha}T00:00:00Z`)) / 86_400_000;
+    return dias <= 2 ? "exito" : dias <= 7 ? "aviso" : "peligro";
+  };
+  const porConfirmar = pendientes?.length ?? 0;
+
   return (
-    <>
-      <EncabezadoPagina titulo={sucursal.nombre} descripcion={`${fechaTexto(hoyCalendarioMX())} · Ventas, finanzas y operación en un solo lugar.`} />
+    <div className="panel-admin">
+      <EncabezadoPagina titulo={sucursal.nombre} descripcion={<>
+        {fechaTexto(hoy)} · {turno ? `Turno ${turno.tipo} abierto desde las ${hora(turno.abierto_en)}` : "Sin turno abierto"}
+        {actualizacion.length > 0 && <span className="chips-frescura" aria-label="Hasta dónde tenemos datos">
+          {actualizacion.map((f) => <Link key={f.tabla} href={f.href} className="chip-frescura" data-tono={frescura(f)}
+            title={`Última fecha registrada en ${sucursal.nombre}. No implica que todos los días anteriores estén completos.`}>
+            <span className="marca-punto" data-tono={frescura(f)} />{f.nombre} · {f.error ? "no se pudo consultar" : f.fecha ? fechaTexto(f.fecha) : "sin datos"}
+          </Link>)}
+        </span>}
+      </>} />
       <Aviso ok={ok} error={error} />
-      {["admin","corporativo"].includes(perfil.rol)&&<DashboardVentasInicio supabase={supabase} rol={perfil.rol} mes={ventas_mes} sucursal={ventas_sucursal} porDefecto={sucursal.id} ruta="/"/>}
 
-      <section className="seccion" aria-labelledby="t-resumen">
-        <h2 id="t-resumen">Tu operación</h2>
-        <div className="inicio-accesos">{accesos.map((a) => <Link key={a.href} className="inicio-acceso" href={a.href}>
-          <IconoInicio nombre={a.titulo} />
-          <strong>{a.titulo}<span aria-hidden="true">↗</span></strong><span>{a.nota}</span>
-        </Link>)}</div>
-      </section>
-      {actualizacion.length > 0 && <section className="seccion" aria-labelledby="t-datos">
-        <h2 id="t-datos">Hasta dónde tenemos datos</h2>
-        <p className="saldo-nota">Última fecha registrada en {sucursal.nombre}. No implica que todos los días anteriores estén completos.</p>
-        <div className="inicio-fuentes">{actualizacion.map((f) => <Link className="inicio-fuente" href={f.href} key={f.tabla}>
-          <span>{f.nombre}</span><strong>{f.error ? "No se pudo consultar" : f.fecha ? fechaTexto(f.fecha) : "Sin datos importados"}</strong>
-        </Link>)}</div>
-      </section>}
-      <section className="seccion" aria-labelledby="t-turno">
-        <h2 id="t-turno">Turno</h2>
-        {turno ? (
-          <div className="acciones">
-            <p>Turno {turno.tipo} abierto desde las {hora(turno.abierto_en)}</p>
-            {!soloLectura && <Link className="boton" href="/arqueo">Registrar arqueo</Link>}
-          </div>
-        ) : puedeAbrirTurno(perfil.rol) ? (
-          <form action={abrirTurno} className="acciones">
-            <select name="tipo" aria-label="Turno" defaultValue="matutino">
-              <option value="matutino">Matutino</option>
-              <option value="vespertino">Vespertino</option>
-            </select>
-            <BotonEnviar pendiente="Abriendo…">Abrir turno</BotonEnviar>
-          </form>
-        ) : (
-          <p className="vacio">{soloLectura ? "No hay turno abierto." : "No hay turno abierto. Pide al encargado que lo abra."}</p>
-        )}
-      </section>
-
-      <section className="seccion" aria-labelledby="t-saldos">
-        <h2 id="t-saldos">Efectivo disponible</h2>
-        <p className="saldo-nota">Saldos de movimientos confirmados. La caja de venta se revisa en el arqueo de turno.</p>
-        <div className="rejilla">
-          <div className="saldo">
-            <span>Bóveda</span>
-            <span className="saldo-monto">{pesos(saldo("boveda"))}</span>
-            <span className="saldo-nota">Efectivo de ventas por entregar a corporativo</span>
-          </div>
-          <div className="saldo">
-            <span>Caja chica</span>
-            <span className="saldo-monto">{pesos(saldo("caja_chica"))}</span>
-            <span className="saldo-nota">Fondo autorizado {pesos(sucursal.fondo_caja_chica)}</span>
-          </div>
-          <div className="saldo">
-            <span>Fondo de cambios</span>
-            <span className="saldo-monto">{pesos(cambios)}</span>
-            <span className="saldo-nota">
-              {Number(cambios) === Number(sucursal.fondo_cambios)
-                ? "Completo"
-                : `Debe sumar ${pesos(sucursal.fondo_cambios)}`}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {ordenesPorRecibir > 0 && (
-        <section className="seccion" aria-labelledby="t-por-recibir">
-          <h2 id="t-por-recibir">Por recibir</h2>
-          <p>{ordenesPorRecibir === 1 ? "Hay 1 orden de compra" : `Hay ${ordenesPorRecibir} órdenes de compra`} con equipo, servicios u otros por recibir.</p>
-          <Link className="boton" href="/recepciones">Registrar lo recibido</Link>
+      {(porConfirmar > 0 || ordenesPorRecibir > 0 || (!turno && puedeAbrirTurno(perfil.rol))) && (
+        <section className="atencion" aria-label="Pendientes de hoy">
+          {porConfirmar > 0 && <a className="atencion-tarjeta" data-tono="aviso" href="#t-pendientes">
+            <span className="atencion-icono"><Icono nombre="billete" tamano={20} /></span>
+            <span><strong>{porConfirmar} {porConfirmar === 1 ? "movimiento" : "movimientos"} por confirmar</strong><small>Efectivo que espera tu confirmación</small></span>
+            <Icono nombre="derecha" />
+          </a>}
+          {ordenesPorRecibir > 0 && <Link className="atencion-tarjeta" data-tono="info" href="/recepciones">
+            <span className="atencion-icono"><Icono nombre="carrito" tamano={20} /></span>
+            <span><strong>{ordenesPorRecibir === 1 ? "1 orden de compra" : `${ordenesPorRecibir} órdenes de compra`} por recibir</strong><small>Equipo, servicios u otros</small></span>
+            <Icono nombre="derecha" />
+          </Link>}
+          {!turno && puedeAbrirTurno(perfil.rol) && <a className="atencion-tarjeta" data-tono="peligro" href="#t-turno">
+            <span className="atencion-icono"><Icono nombre="alerta" tamano={20} /></span>
+            <span><strong>No hay turno abierto</strong><small>Ábrelo para registrar arqueos y movimientos</small></span>
+            <Icono nombre="derecha" />
+          </a>}
         </section>
       )}
 
-      <section className="seccion" aria-labelledby="t-pendientes">
-        <h2 id="t-pendientes">Por confirmar</h2>
+      <div className="panel-fila">
+        <section className="seccion" aria-labelledby="t-saldos">
+          <div className="seccion-cabecera">
+            <h2 id="t-saldos">Efectivo disponible</h2>
+            <p className="saldo-nota">Movimientos confirmados. La caja de venta se revisa en el arqueo.</p>
+          </div>
+          <div className="indicadores-marco"><div className="indicadores inicio-saldos">
+            <div className="indicador">
+              <span className="indicador-etiqueta">Bóveda</span>
+              <strong className="indicador-valor">{pesos(saldo("boveda"))}</strong>
+              <span className="indicador-detalle">Efectivo de ventas por entregar a corporativo</span>
+            </div>
+            <div className="indicador">
+              <span className="indicador-etiqueta">Caja chica</span>
+              <strong className="indicador-valor">{pesos(saldo("caja_chica"))}</strong>
+              <span className="indicador-detalle">Fondo autorizado {pesos(sucursal.fondo_caja_chica)}</span>
+            </div>
+            <div className="indicador" data-alerta={Number(cambios) === Number(sucursal.fondo_cambios) ? undefined : "aviso"}>
+              <span className="indicador-etiqueta">Fondo de cambios</span>
+              <strong className="indicador-valor">{pesos(cambios)}</strong>
+              <span className="indicador-cambio">{Number(cambios) === Number(sucursal.fondo_cambios)
+                ? <><Icono nombre="ok" /> Completo</>
+                : `Debe sumar ${pesos(sucursal.fondo_cambios)}`}</span>
+            </div>
+          </div></div>
+        </section>
+
+        <section className="seccion" id="t-turno" aria-labelledby="t-turno-titulo">
+          <div className="seccion-cabecera">
+            <h2 id="t-turno-titulo">Turno</h2>
+            <span className="insignia" data-tono={turno ? "exito" : "aviso"}>{turno ? "Abierto" : "Cerrado"}</span>
+          </div>
+          {turno ? (
+            <div className="acciones">
+              <p>Turno {turno.tipo} abierto desde las {hora(turno.abierto_en)}</p>
+              {!soloLectura && <Link className="boton" href="/arqueo">Registrar arqueo</Link>}
+            </div>
+          ) : puedeAbrirTurno(perfil.rol) ? (
+            <form action={abrirTurno} className="acciones">
+              <select name="tipo" aria-label="Turno" defaultValue="matutino">
+                <option value="matutino">Matutino</option>
+                <option value="vespertino">Vespertino</option>
+              </select>
+              <BotonEnviar pendiente="Abriendo…">Abrir turno</BotonEnviar>
+            </form>
+          ) : (
+            <p className="vacio">{soloLectura ? "No hay turno abierto." : "No hay turno abierto. Pide al encargado que lo abra."}</p>
+          )}
+        </section>
+      </div>
+
+      <section className="seccion" id="t-pendientes" aria-labelledby="t-pendientes-titulo">
+        <div className="seccion-cabecera">
+          <h2 id="t-pendientes-titulo">Por confirmar</h2>
+          <span className="insignia" data-tono={porConfirmar ? "aviso" : "exito"}>{porConfirmar ? porConfirmar : "Al día"}</span>
+        </div>
         {!pendientes?.length ? (
           <p className="vacio">No hay movimientos esperando confirmación.</p>
         ) : (
@@ -173,6 +196,16 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
           </div>
         )}
       </section>
-    </>
+
+      {["admin","corporativo"].includes(perfil.rol)&&<DashboardVentasInicio supabase={supabase} rol={perfil.rol} mes={ventas_mes} sucursal={ventas_sucursal} porDefecto={sucursal.id} ruta="/"/>}
+
+      <section className="seccion" aria-labelledby="t-resumen">
+        <h2 id="t-resumen">Ir a</h2>
+        <div className="inicio-accesos">{accesos.map((a) => <Link key={a.href} className="inicio-acceso" href={a.href}>
+          <IconoInicio nombre={a.titulo} />
+          <strong>{a.titulo}<span aria-hidden="true">↗</span></strong><span>{a.nota}</span>
+        </Link>)}</div>
+      </section>
+    </div>
   );
 }
