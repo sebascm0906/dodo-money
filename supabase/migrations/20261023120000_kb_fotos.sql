@@ -25,7 +25,7 @@ declare v public.kb_fotos; ruta_nueva text;
 begin
  if not public.kb_admin() then raise exception 'Solo administración agrega fotos a los manuales.';end if;
  if p_id is null or p_articulo is null or p_nombre is null or length(trim(p_nombre)) not between 1 and 200 or p_nombre~'[[:cntrl:]/\\]' or p_bytes is null or p_bytes not between 1 and 4194304 or p_sha256 is null or p_sha256!~'^[0-9a-f]{64}$' or p_descripcion is null or length(trim(p_descripcion))>300 then raise exception 'Datos de foto inválidos.';end if;
- if p_mime is distinct from case p_extension when 'jpg' then 'image/jpeg' when 'png' then 'image/png' when 'webp' then 'image/webp' end then raise exception 'Usa una foto JPG, PNG o WebP.';end if;
+ if p_mime is distinct from (case p_extension when 'jpg' then 'image/jpeg' when 'png' then 'image/png' when 'webp' then 'image/webp' end) then raise exception 'Usa una foto JPG, PNG o WebP.';end if;
  if not exists(select 1 from public.kb_articulos where id=p_articulo) then raise exception 'Manual inexistente.';end if;
  perform pg_advisory_xact_lock(hashtextextended('kb-foto:'||p_id::text,0));
  if (select count(*) from public.kb_fotos where articulo_id=p_articulo and retirado_en is null and id<>p_id)>=30 then raise exception 'Un manual puede tener hasta 30 fotos.';end if;
