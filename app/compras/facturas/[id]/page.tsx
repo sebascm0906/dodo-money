@@ -273,6 +273,7 @@ export default async function DetalleFactura({ params, searchParams }: { params:
 
 </>},
         {id:"datos", titulo:"Datos y contabilidad", contenido:<>      <section className="seccion">
+        <p><Link className="boton boton-secundario" href={`/finanzas/asignacion?mes=${f.fecha_emision.slice(0,7)}&factura=${id}`}>Revisar cuentas contables de esta factura</Link></p>
         <dl className="tarjeta-datos">
           <dt>Emitida</dt><dd>{fechaTexto(f.fecha_emision)} · {f.metodo_pago ?? "sin método"}{f.forma_pago ? ` · forma ${f.forma_pago}` : ""}</dd>
           <dt>Subtotal</dt><dd>{pesos(f.subtotal)}{Number(f.descuento) ? ` · descuento ${pesos(f.descuento)}` : ""}</dd>

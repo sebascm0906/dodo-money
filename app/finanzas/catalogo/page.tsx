@@ -10,6 +10,7 @@ export default async function Catalogo({searchParams}:{searchParams:Promise<{ent
   return <div className="panel-admin">
     <Link href="/finanzas">← P&L</Link>
     <h1>Catálogo contable · Grupo Helper</h1>
+    <Link className="boton boton-secundario" href="/finanzas/asignacion">Revisar y asignar cuentas</Link>
     <p>Cuentas activas del maestro de contabilidad, por razón social. La sucursal se conserva como dimensión separada.</p>
     <form method="get" className="barra-filtros">
       <label>Razón social<select name="entidad" defaultValue={entidad}>{Object.entries(ENTIDADES_HELPER).map(([id,nombre])=><option key={id} value={id}>{nombre}</option>)}</select></label>
@@ -18,7 +19,7 @@ export default async function Catalogo({searchParams}:{searchParams:Promise<{ent
     </form>
     <p>{cuentas.length} cuentas · {ENTIDADES_HELPER[entidad]}</p>
     <details className="nota-plegable"><summary>Correspondencia con el P&L y pendientes</summary>
-      <p>Esta primera etapa incorpora el catálogo y muestra referencias en el P&L, incluido octubre. Las referencias no son una reclasificación de documentos. La captura todavía usa las categorías actuales; la asignación de cuenta exacta con historial se incorporará en la siguiente etapa.</p>
+      <p>El catálogo muestra referencias en el P&L, incluido octubre. Para registrar una cuenta exacta por documento, abre «Revisar y asignar cuentas»: selección, vista previa y confirmación con motivo. Las categorías y los importes del P&L se conservan; una referencia por sí sola no equivale a una asignación.</p>
       <p>Servicios, renta, nómina, oficina y otros necesitan revisión por movimiento. No se infiere deducibilidad por faltar el XML. Los cálculos conciliados de Rappi, inventarios, pagos e importes se conservan.</p>
       <ul>{Object.entries(MAPEO_HELPER).filter(([,m])=>m.nota).map(([clave,m])=><li key={clave}><strong>{clave}: {m.cuentas.join(' / ')}</strong> · {m.nota}</li>)}</ul>
     </details>

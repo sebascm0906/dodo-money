@@ -1,0 +1,54 @@
+-- Ensayo reversible, después de la migración. No aplica equivalencias históricas.
+begin;
+do $pruebas$
+<<ensayo>>
+declare a uuid;co uuid;g uuid;s uuid;r text;destino uuid:=gen_random_uuid();sol uuid:=gen_random_uuid();
+ clave text;h text;cuenta text;otra text;v2 uuid;v3 uuid;original jsonb;actual jsonb;
+begin
+ select p.id into a from public.perfiles p where p.rol::text='admin' and p.activo and not p.debe_cambiar_contrasena limit 1;
+ select p.id into co from public.perfiles p where p.rol::text='corporativo' and p.activo and not p.debe_cambiar_contrasena limit 1;
+ select p.id into g from public.perfiles p where p.rol::text='gerente' and p.activo and not p.debe_cambiar_contrasena limit 1;
+ select rs.sucursal_id,rs.rfc into s,r from public.razon_social_sucursales rs join public.razones_sociales e using(rfc) where e.activa and rs.rfc in('CMS230321FI8','HCM260306B93') order by rs.rfc limit 1;
+ if a is null or co is null or g is null or s is null then raise exception 'FALTAN DATOS: admin/corporativo/gerente y sucursal con razón activa.';end if;
+ insert into public.gastos_mes(id,sucursal_id,mes,cuenta,monto,concepto,creado_por) values(destino,s,'2026-10-01','servicios',123.45,'ENSAYO CUENTAS EXACTAS',a);
+ clave:='ajuste:'||destino;
+ select jsonb_build_array((select jsonb_agg(to_jsonb(x) order by x.id) from public.facturas x),(select jsonb_agg(to_jsonb(x) order by x.id) from public.cierres_dia x),(select jsonb_agg(to_jsonb(x) order by x.id) from public.recolecciones_corporativo x),(select to_jsonb(x) from public.gastos_mes x where x.id=destino)) into original;
+ perform set_config('request.jwt.claims',json_build_object('sub',a,'role','authenticated')::text,true);
+ set local role authenticated;
+ select m.huella into h from public.contabilidad_movimientos m where m.clave=ensayo.clave;
+ select c.codigo into cuenta from public.contabilidad_catalogo c where c.rfc=r and c.capturable and c.codigo like '602-%' order by c.codigo limit 1;
+ select c.codigo into otra from public.contabilidad_catalogo c where c.rfc=r and c.capturable and c.codigo like '602-%' and c.codigo<>cuenta order by c.codigo limit 1;
+ if h is null or cuenta is null or otra is null then raise exception 'FALTAN DATOS: vista o cuentas capturables.';end if;
+ begin perform public.asignar_cuenta_contable(sol,clave,null,h,r,cuenta,'Asignación revisada de ensayo',false);raise exception 'FALLÓ: sin confirmación';exception when others then if sqlerrm not like '%confirma con un motivo%' then raise;end if;end;
+ begin perform public.asignar_cuenta_contable(sol,clave,null,h,r,cuenta,'Hoy',true);raise exception 'FALLÓ: motivo';exception when others then if sqlerrm not like '%confirma con un motivo%' then raise;end if;end;
+ begin perform public.asignar_cuenta_contable(sol,clave,null,h,r,'100-00-000','Asignación revisada de ensayo',true);raise exception 'FALLÓ: título';exception when others then if sqlerrm not like '%cuenta capturable%' then raise;end if;end;
+ begin perform public.asignar_cuenta_contable(sol,clave,null,h,r,'502-01-000','Asignación revisada de ensayo',true);raise exception 'FALLÓ: memo';exception when others then if sqlerrm not like '%cruza memo%' and sqlerrm not like '%cuenta capturable%' then raise;end if;end;
+ if public.asignar_cuenta_contable(sol,clave,null,h,r,cuenta,'Asignación revisada de ensayo',true)<>sol then raise exception 'FALLÓ: asignar';end if;
+ if public.asignar_cuenta_contable(sol,clave,null,h,r,cuenta,'Asignación revisada de ensayo',true)<>sol or (select count(*) from public.contabilidad_asignaciones x where x.clave=ensayo.clave)<>1 then raise exception 'FALLÓ: doble envío';end if;
+ begin perform public.asignar_cuenta_contable(sol,clave,null,h,r,otra,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: sobrescritura';exception when others then if sqlerrm not like '%utilizada con otros datos%' then raise;end if;end;
+ begin perform public.asignar_cuenta_contable(gen_random_uuid(),clave,null,h,r,otra,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: concurrencia';exception when others then if sqlerrm not like '%asignación cambió%' then raise;end if;end;
+ v2:=public.asignar_cuenta_contable(gen_random_uuid(),clave,sol,h,r,otra,'Corrección revisada de ensayo',true);
+ v3:=public.asignar_cuenta_contable(gen_random_uuid(),clave,v2,h,r,null,'Retiro justificado de ensayo',true);
+ if (select count(*) from public.contabilidad_asignaciones x where x.clave=ensayo.clave)<>3 or not exists(select 1 from public.contabilidad_actual x where x.id=v3 and x.codigo is null and x.revision=3) or not exists(select 1 from public.contabilidad_asignaciones x where x.id=sol and x.autor=a and x.codigo=cuenta and x.huella=h) then raise exception 'FALLÓ: autor, versión o retiro';end if;
+ begin update public.contabilidad_asignaciones set codigo=otra where id=sol;raise exception 'FALLÓ: escritura directa';exception when insufficient_privilege then null;end;
+ begin delete from public.contabilidad_asignaciones where id=sol;raise exception 'FALLÓ: borrar historial';exception when insufficient_privilege then null;end;
+ perform set_config('request.jwt.claims',json_build_object('sub',co,'role','authenticated')::text,true);
+ if not exists(select 1 from public.contabilidad_asignaciones x where x.id=sol) or not exists(select 1 from public.contabilidad_movimientos x where x.clave=ensayo.clave) then raise exception 'FALLÓ: corporativo consulta';end if;
+ begin perform public.asignar_cuenta_contable(gen_random_uuid(),clave,v3,h,r,cuenta,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: corporativo modifica';exception when others then if sqlerrm not like '%Solo administración%' then raise;end if;end;
+ perform set_config('request.jwt.claims',json_build_object('sub',g,'role','authenticated')::text,true);
+ if exists(select 1 from public.contabilidad_asignaciones x where x.id=sol) or exists(select 1 from public.contabilidad_movimientos x where x.clave=ensayo.clave) then raise exception 'FALLÓ: gerente consulta';end if;
+ begin perform public.asignar_cuenta_contable(gen_random_uuid(),clave,v3,h,r,cuenta,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: gerente modifica';exception when others then if sqlerrm not like '%Solo administración%' then raise;end if;end;
+ reset role;
+ select jsonb_build_array((select jsonb_agg(to_jsonb(x) order by x.id) from public.facturas x),(select jsonb_agg(to_jsonb(x) order by x.id) from public.cierres_dia x),(select jsonb_agg(to_jsonb(x) order by x.id) from public.recolecciones_corporativo x),(select to_jsonb(x) from public.gastos_mes x where x.id=destino)) into actual;
+ if original is distinct from actual then raise exception 'FALLÓ: datos protegidos';end if;
+ update public.gastos_mes set monto=124 where id=destino;
+ perform set_config('request.jwt.claims',json_build_object('sub',a,'role','authenticated')::text,true);
+ set local role authenticated;
+ begin perform public.asignar_cuenta_contable(gen_random_uuid(),clave,v3,h,r,cuenta,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: fuente modificada';exception when others then if sqlerrm not like '%documento cambió%' then raise;end if;end;
+ reset role;
+ set local role anon;
+ begin perform public.asignar_cuenta_contable(gen_random_uuid(),clave,v3,h,r,cuenta,'Asignación revisada de ensayo',true);raise exception 'FALLÓ: anónimo ejecuta';exception when insufficient_privilege then null;end;
+ reset role;
+ raise notice 'PRUEBAS OK — equivalencia revisada · cuenta capturable · razón social · memo protegido · asignación y retiro con historial · autor · doble envío · sin sobrescritura · concurrencia · fuente protegida · corporativo consulta · gerente sin acceso · sin escritura directa · anónimo sin ejecución · importes y entrega 004 intactos · ensayo reversible';
+end $pruebas$;
+rollback;

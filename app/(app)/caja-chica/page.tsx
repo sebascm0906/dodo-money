@@ -1,4 +1,5 @@
 import { EncabezadoPagina } from "@/components/EncabezadoPagina";
+import Link from 'next/link';
 import { Aviso } from "@/components/Aviso";
 import { BotonEnviar } from "@/components/BotonEnviar";
 import { obtenerContexto, puedeGestionar } from "@/lib/contexto";
@@ -55,6 +56,7 @@ export default async function CajaChica({ searchParams }: { searchParams: Promis
   return (
     <>
       <EncabezadoPagina titulo="Gastos" descripcion="Registra limpieza, agua y otros gastos con su origen y comprobante. Si ya estaban descontados en un corte anterior, elige el registro informativo para evitar otra salida." />
+      {perfil.rol==='admin'&&<p><Link className="boton boton-secundario" href="/finanzas/asignacion">Revisar cuentas contables de gastos</Link></p>}
       <Aviso ok={ok} error={error} />
 
       <section className="seccion" aria-labelledby="t-estado">

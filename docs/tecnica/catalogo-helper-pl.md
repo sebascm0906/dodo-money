@@ -13,7 +13,9 @@ El usuario autorizó aplicar la clasificación al histórico de octubre y a las 
 - Rappi conserva el cálculo del financiero ya conciliado; la hoja Mapeo P&L Dodo utiliza un criterio anterior y cifras de ejemplo al 12 de octubre. No importar esos saldos como si fueran el histórico real.
 - Insumos e inversiones conservan el memo; no cargar las compras además del costo BOM ni llamar costo real al teórico. No inferir no deducibilidad solo porque falte el XML de una prefactura.
 
-## Entrega 2: asignación por movimiento y nuevas capturas (pendiente)
+## Entrega 2: asignación por movimiento y nuevas capturas
+
+La revisión individual, diario de asignaciones y acceso posterior a las nuevas capturas se preparan en [Asignación de cuentas exactas](asignacion-cuentas-exactas.md). Esa entrega conserva el cálculo actual del P&L. La herencia por proveedor y la agrupación por rubro descritas a continuación siguen pendientes.
 
 Añadir cuenta contable exacta como campo separado de la categoría operacional, con validación de entidad, vigencia y nivel capturable. Capturar por concepto de factura, gasto, proveedor por omisión y ajustes mensuales. El rubro financiero del maestro agrupará esos movimientos y permitirá separar TPV (R312) de otros (R319), y oficina 603 de tienda 602.
 
